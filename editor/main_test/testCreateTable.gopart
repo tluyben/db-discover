@@ -1,0 +1,28 @@
+func TestCreateTable(t *testing.T) {
+	setupTestDB()
+	defer teardownTestDB()
+
+	// Insert test database
+	result, _ := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test database", 1)
+	databaseID, _ := result.LastInsertId()
+
+	router := mux.NewRouter()
+	router.HandleFunc("/tables", createTable).Methods("POST")
+
+	payload := []byte(fmt.Sprintf(`{"name":"TestTable","database_id":%d}`, databaseID))
+	req, _ := http.NewRequest("POST", "/tables", bytes.NewBuffer(payload))
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response Table
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	if response.Name != "TestTable" {
+		t.Errorf("handler returned unexpected body: got %v want %v", response.Name, "TestTable")
+	}
+}

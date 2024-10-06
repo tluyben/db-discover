@@ -42,231 +42,22 @@ var workspaceBasePath string
 
 var metaDBPath string
 
-func updateField(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var field Field
-	json.NewDecoder(r.Body).Decode(&field)
-
-	_, err := metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
-		field.Name, field.Type, id)
+func getOtherColumnsSQL(tableID int, excludeFieldID string) string {
+	rows, err := metaDB.Query("SELECT name, type FROM fields WHERE table_id = ? AND id != ?", tableID, excludeFieldID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Update column in physical SQLite database
-	var tableID, databaseID, workspaceID int
-	var oldFieldName, tableName string
-	err = metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&oldFieldName, &tableID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	// SQLite doesn't support changing column types directly, so we need to recreate the table
-	_, err = db.Exec(fmt.Sprintf(`
-		CREATE TABLE %s_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			%s %s,
-			%s
-		);
-		INSERT INTO %s_new SELECT * FROM %s;
-		DROP TABLE %s;
-		ALTER TABLE %s_new RENAME TO %s;
-	`, tableName, field.Name, field.Type,
-		getOtherColumnsSQL(tableID, id),
-		tableName, tableName, tableName, tableName, tableName))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(field)
-}
-
-func listFields(w http.ResponseWriter, r *http.Request) {
-	tableID := r.URL.Query().Get("table_id")
-	if tableID == "" {
-		http.Error(w, "table_id is required", http.StatusBadRequest)
-		return
-	}
-
-	rows, err := metaDB.Query("SELECT id, name, type FROM fields WHERE table_id = ?", tableID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		log.Printf("Error getting other columns: %v", err)
+		return ""
 	}
 	defer rows.Close()
 
-	var fields []Field
+	var columns []string
 	for rows.Next() {
-		var field Field
-		rows.Scan(&field.ID, &field.Name, &field.Type)
-		field.TableID, _ = strconv.Atoi(tableID)
-		fields = append(fields, field)
+		var name, fieldType string
+		rows.Scan(&name, &fieldType)
+		columns = append(columns, fmt.Sprintf("%s %s", name, fieldType))
 	}
 
-	json.NewEncoder(w).Encode(fields)
-}
-
-func destroyField(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var tableID, databaseID, workspaceID int
-	var fieldName, tableName string
-	err := metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&fieldName, &tableID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	_, err = metaDB.Exec("DELETE FROM fields WHERE id = ?", id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Remove column from physical SQLite database
-	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	// SQLite doesn't support dropping columns directly, so we need to recreate the table
-	_, err = db.Exec(fmt.Sprintf(`
-		CREATE TABLE %s_new AS SELECT * FROM %s;
-		DROP TABLE %s;
-		ALTER TABLE %s_new RENAME TO %s;
-	`, tableName, tableName, tableName, tableName, tableName))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func createField(w http.ResponseWriter, r *http.Request) {
-	var field Field
-	json.NewDecoder(r.Body).Decode(&field)
-
-	result, err := metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)",
-		field.Name, field.Type, field.TableID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	id, _ := result.LastInsertId()
-	field.ID = int(id)
-
-	// Add column to physical SQLite database
-	var databaseID, workspaceID int
-	var tableName string
-	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", field.TableID).Scan(&databaseID, &tableName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, field.Name, field.Type))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(field)
-}
-
-func main() {
-	workspaceBasePath = os.Getenv("WORKSPACE_BASE_PATH")
-	if workspaceBasePath == "" {
-		workspaceBasePath = "/home/workspaces/{workspace_id}"
-	}
-
-	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
-
-	var err error
-	metaDB, err = sql.Open("sqlite3", metaDBPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer metaDB.Close()
-
-	initMetaDB()
-
-	// Define the port flag
-	port := flag.Int("port", 8080, "Port to run the server on")
-	flag.Parse()
-
-	r := mux.NewRouter()
-	r.HandleFunc("/databases", createDatabase).Methods("POST")
-	r.HandleFunc("/databases", listDatabases).Methods("GET")
-	r.HandleFunc("/databases/{id}", destroyDatabase).Methods("DELETE")
-	r.HandleFunc("/tables", createTable).Methods("POST")
-	r.HandleFunc("/tables", listTables).Methods("GET")
-	r.HandleFunc("/tables/{id}", destroyTable).Methods("DELETE")
-	r.HandleFunc("/fields", createField).Methods("POST")
-	r.HandleFunc("/fields", listFields).Methods("GET")
-	r.HandleFunc("/fields/{id}", destroyField).Methods("DELETE")
-	r.HandleFunc("/fields/{id}", updateField).Methods("PUT")
-	r.HandleFunc("/data", addUpdateData).Methods("POST")
-	r.HandleFunc("/data", getData).Methods("GET")
-
-	log.Printf("Server starting on :%d", *port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), r))
+	return strings.Join(columns, ", ")
 }
 
 func listTables(w http.ResponseWriter, r *http.Request) {
@@ -292,87 +83,6 @@ func listTables(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(tables)
-}
-
-func createTable(w http.ResponseWriter, r *http.Request) {
-	var table Table
-	json.NewDecoder(r.Body).Decode(&table)
-
-	result, err := metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)",
-		table.Name, table.DatabaseID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	id, _ := result.LastInsertId()
-	table.ID = int(id)
-
-	// Create table in physical SQLite database
-	var workspaceID int
-	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", table.DatabaseID).Scan(&workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", table.DatabaseID))
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	_, err = db.Exec(fmt.Sprintf("CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT)", table.Name))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(table)
-}
-
-func destroyTable(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var databaseID, workspaceID int
-	var tableName string
-	err := metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", id).Scan(&databaseID, &tableName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	_, err = metaDB.Exec("DELETE FROM tables WHERE id = ?", id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Drop table in physical SQLite database
-	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	_, err = db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func initMetaDB() {
@@ -425,32 +135,6 @@ func listDatabases(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(databases)
-}
-
-func createDatabase(w http.ResponseWriter, r *http.Request) {
-	var db Database
-	json.NewDecoder(r.Body).Decode(&db)
-
-	result, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)",
-		db.Name, db.Description, db.WorkspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	id, _ := result.LastInsertId()
-	db.ID = int(id)
-
-	// Create physical SQLite database
-	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", db.WorkspaceID), fmt.Sprintf("%d.sqlite", db.ID))
-	os.MkdirAll(filepath.Dir(dbPath), os.ModePerm)
-	_, err = sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(db)
 }
 
 func addUpdateData(w http.ResponseWriter, r *http.Request) {
@@ -602,20 +286,336 @@ func destroyDatabase(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func getOtherColumnsSQL(tableID int, excludeFieldID string) string {
-	rows, err := metaDB.Query("SELECT name, type FROM fields WHERE table_id = ? AND id != ?", tableID, excludeFieldID)
+func updateField(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var field Field
+	json.NewDecoder(r.Body).Decode(&field)
+
+	_, err := metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
+		field.Name, field.Type, id)
 	if err != nil {
-		log.Printf("Error getting other columns: %v", err)
-		return ""
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Update column in physical SQLite database
+	var tableID, databaseID, workspaceID int
+	var oldFieldName, tableName string
+	err = metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&oldFieldName, &tableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// SQLite doesn't support changing column types directly, so we need to recreate the table
+	_, err = db.Exec(fmt.Sprintf(`
+		CREATE TABLE %s_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			%s %s,
+			%s
+		);
+		INSERT INTO %s_new SELECT * FROM %s;
+		DROP TABLE %s;
+		ALTER TABLE %s_new RENAME TO %s;
+	`, tableName, field.Name, field.Type,
+		getOtherColumnsSQL(tableID, id),
+		tableName, tableName, tableName, tableName, tableName))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(field)
+}
+
+func destroyField(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var tableID, databaseID, workspaceID int
+	var fieldName, tableName string
+	err := metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&fieldName, &tableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = metaDB.Exec("DELETE FROM fields WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Remove column from physical SQLite database
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// SQLite doesn't support dropping columns directly, so we need to recreate the table
+	_, err = db.Exec(fmt.Sprintf(`
+		CREATE TABLE %s_new AS SELECT * FROM %s;
+		DROP TABLE %s;
+		ALTER TABLE %s_new RENAME TO %s;
+	`, tableName, tableName, tableName, tableName, tableName))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func createDatabase(w http.ResponseWriter, r *http.Request) {
+	var db Database
+	json.NewDecoder(r.Body).Decode(&db)
+
+	result, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)",
+		db.Name, db.Description, db.WorkspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	db.ID = int(id)
+
+	// Create physical SQLite database
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", db.WorkspaceID), fmt.Sprintf("%d.sqlite", db.ID))
+	os.MkdirAll(filepath.Dir(dbPath), os.ModePerm)
+	_, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(db)
+}
+
+func main() {
+	workspaceBasePath = os.Getenv("WORKSPACE_BASE_PATH")
+	if workspaceBasePath == "" {
+		workspaceBasePath = "/home/workspaces/{workspace_id}"
+	}
+
+	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+
+	var err error
+	metaDB, err = sql.Open("sqlite3", metaDBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer metaDB.Close()
+
+	initMetaDB()
+
+	// Define the port flag
+	port := flag.Int("port", 8080, "Port to run the server on")
+	flag.Parse()
+
+	r := mux.NewRouter()
+	r.HandleFunc("/databases", createDatabase).Methods("POST")
+	r.HandleFunc("/databases", listDatabases).Methods("GET")
+	r.HandleFunc("/databases/{id}", destroyDatabase).Methods("DELETE")
+	r.HandleFunc("/tables", createTable).Methods("POST")
+	r.HandleFunc("/tables", listTables).Methods("GET")
+	r.HandleFunc("/tables/{id}", destroyTable).Methods("DELETE")
+	r.HandleFunc("/fields", createField).Methods("POST")
+	r.HandleFunc("/fields", listFields).Methods("GET")
+	r.HandleFunc("/fields/{id}", destroyField).Methods("DELETE")
+	r.HandleFunc("/fields/{id}", updateField).Methods("PUT")
+	r.HandleFunc("/data", addUpdateData).Methods("POST")
+	r.HandleFunc("/data", getData).Methods("GET")
+
+	log.Printf("Server starting on :%d", *port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), r))
+}
+
+func destroyTable(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var databaseID, workspaceID int
+	var tableName string
+	err := metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", id).Scan(&databaseID, &tableName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = metaDB.Exec("DELETE FROM tables WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Drop table in physical SQLite database
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	_, err = db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func createTable(w http.ResponseWriter, r *http.Request) {
+	var table Table
+	json.NewDecoder(r.Body).Decode(&table)
+
+	result, err := metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)",
+		table.Name, table.DatabaseID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	table.ID = int(id)
+
+	// Create table in physical SQLite database
+	var workspaceID int
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", table.DatabaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", table.DatabaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT)", table.Name))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(table)
+}
+
+func listFields(w http.ResponseWriter, r *http.Request) {
+	tableID := r.URL.Query().Get("table_id")
+	if tableID == "" {
+		http.Error(w, "table_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := metaDB.Query("SELECT id, name, type FROM fields WHERE table_id = ?", tableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	defer rows.Close()
 
-	var columns []string
+	var fields []Field
 	for rows.Next() {
-		var name, fieldType string
-		rows.Scan(&name, &fieldType)
-		columns = append(columns, fmt.Sprintf("%s %s", name, fieldType))
+		var field Field
+		rows.Scan(&field.ID, &field.Name, &field.Type)
+		field.TableID, _ = strconv.Atoi(tableID)
+		fields = append(fields, field)
 	}
 
-	return strings.Join(columns, ", ")
+	json.NewEncoder(w).Encode(fields)
+}
+
+func createField(w http.ResponseWriter, r *http.Request) {
+	var field Field
+	json.NewDecoder(r.Body).Decode(&field)
+
+	result, err := metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)",
+		field.Name, field.Type, field.TableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	field.ID = int(id)
+
+	// Add column to physical SQLite database
+	var databaseID, workspaceID int
+	var tableName string
+	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", field.TableID).Scan(&databaseID, &tableName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, field.Name, field.Type))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(field)
 }

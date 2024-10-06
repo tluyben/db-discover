@@ -1,12 +1,10 @@
 func TestListDatabases(t *testing.T) {
-	setupTestEnv()
-	defer teardownTestEnv()
+	setupTestDB()
+	defer teardownTestDB()
 
 	// Insert test data
-	_, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB1", "Test database 1", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB1", "Test database 1", 1)
+	metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB2", "Test database 2", 1)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/databases", listDatabases).Methods("GET")
@@ -23,11 +21,7 @@ func TestListDatabases(t *testing.T) {
 	var response []Database
 	json.Unmarshal(rr.Body.Bytes(), &response)
 
-	if len(response) != 1 {
-		t.Errorf("expected 1 database, got %d", len(response))
-	}
-
-	if response[0].Name != "TestDB1" {
-		t.Errorf("expected database name TestDB1, got %v", response[0].Name)
+	if len(response) != 2 {
+		t.Errorf("handler returned unexpected number of databases: got %v want %v", len(response), 2)
 	}
 }

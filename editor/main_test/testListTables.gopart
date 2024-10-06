@@ -1,0 +1,29 @@
+func TestListTables(t *testing.T) {
+	setupTestDB()
+	defer teardownTestDB()
+
+	// Insert test data
+	result, _ := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test database", 1)
+	databaseID, _ := result.LastInsertId()
+	metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable1", databaseID)
+	metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable2", databaseID)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/tables", listTables).Methods("GET")
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/tables?database_id=%d", databaseID), nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response []Table
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	if len(response) != 2 {
+		t.Errorf("handler returned unexpected number of tables: got %v want %v", len(response), 2)
+	}
+}

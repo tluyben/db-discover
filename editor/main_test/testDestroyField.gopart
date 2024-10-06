@@ -1,0 +1,31 @@
+func TestDestroyField(t *testing.T) {
+	setupTestDB()
+	defer teardownTestDB()
+
+	// Insert test data
+	dbResult, _ := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test database", 1)
+	databaseID, _ := dbResult.LastInsertId()
+	tableResult, _ := metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable", databaseID)
+	tableID, _ := tableResult.LastInsertId()
+	fieldResult, _ := metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)", "TestField", "TEXT", tableID)
+	fieldID, _ := fieldResult.LastInsertId()
+
+	router := mux.NewRouter()
+	router.HandleFunc("/fields/{id}", destroyField).Methods("DELETE")
+
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/fields/%d", fieldID), nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusNoContent {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
+	}
+
+	// Verify field is deleted
+	var count int
+	metaDB.QueryRow("SELECT COUNT(*) FROM fields WHERE id = ?", fieldID).Scan(&count)
+	if count != 0 {
+		t.Errorf("field was not deleted: got %v records, want 0", count)
+	}
+}

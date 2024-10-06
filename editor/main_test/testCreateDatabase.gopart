@@ -1,6 +1,6 @@
 func TestCreateDatabase(t *testing.T) {
-	setupTestEnv()
-	defer teardownTestEnv()
+	setupTestDB()
+	defer teardownTestDB()
 
 	router := mux.NewRouter()
 	router.HandleFunc("/databases", createDatabase).Methods("POST")
@@ -19,6 +19,6 @@ func TestCreateDatabase(t *testing.T) {
 	json.Unmarshal(rr.Body.Bytes(), &response)
 
 	if response.Name != "TestDB" {
-		t.Errorf("expected database name TestDB, got %v", response.Name)
+		t.Errorf("handler returned unexpected body: got %v want %v", response.Name, "TestDB")
 	}
 }

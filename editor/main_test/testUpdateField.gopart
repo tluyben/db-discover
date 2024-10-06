@@ -1,0 +1,32 @@
+func TestUpdateField(t *testing.T) {
+	setupTestDB()
+	defer teardownTestDB()
+
+	// Insert test data
+	dbResult, _ := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test database", 1)
+	databaseID, _ := dbResult.LastInsertId()
+	tableResult, _ := metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable", databaseID)
+	tableID, _ := tableResult.LastInsertId()
+	fieldResult, _ := metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)", "TestField", "TEXT", tableID)
+	fieldID, _ := fieldResult.LastInsertId()
+
+	router := mux.NewRouter()
+	router.HandleFunc("/fields/{id}", updateField).Methods("PUT")
+
+	payload := []byte(`{"name":"UpdatedField","type":"INTEGER"}`)
+	req, _ := http.NewRequest("PUT", fmt.Sprintf("/fields/%d", fieldID), bytes.NewBuffer(payload))
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response Field
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	if response.Name != "UpdatedField" || response.Type != "INTEGER" {
+		t.Errorf("handler returned unexpected body: got name=%v, type=%v, want name=UpdatedField, type=INTEGER", response.Name, response.Type)
+	}
+}

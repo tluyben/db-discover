@@ -1,0 +1,12 @@
+func setupTestDB() {
+	var err error
+	metaDB, err = sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	initMetaDB()
+}
+
+func teardownTestDB() {
+	metaDB.Close()
+}
