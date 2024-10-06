@@ -1,0 +1,25 @@
+func listFields(w http.ResponseWriter, r *http.Request) {
+	tableID := r.URL.Query().Get("table_id")
+	if tableID == "" {
+		http.Error(w, "table_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := metaDB.Query("SELECT id, name, type FROM fields WHERE table_id = ?", tableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var fields []Field
+	for rows.Next() {
+		var field Field
+		rows.Scan(&field.ID, &field.Name, &field.Type)
+		field.TableID, _ = strconv.Atoi(tableID)
+		fields = append(fields, field)
+	}
+
+	json.NewEncoder(w).Encode(fields)
+}
+

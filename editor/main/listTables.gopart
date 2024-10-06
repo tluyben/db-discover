@@ -1,0 +1,25 @@
+func listTables(w http.ResponseWriter, r *http.Request) {
+	databaseID := r.URL.Query().Get("database_id")
+	if databaseID == "" {
+		http.Error(w, "database_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := metaDB.Query("SELECT id, name FROM tables WHERE database_id = ?", databaseID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var tables []Table
+	for rows.Next() {
+		var table Table
+		rows.Scan(&table.ID, &table.Name)
+		table.DatabaseID, _ = strconv.Atoi(databaseID)
+		tables = append(tables, table)
+	}
+
+	json.NewEncoder(w).Encode(tables)
+}
+

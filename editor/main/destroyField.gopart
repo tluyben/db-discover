@@ -1,0 +1,53 @@
+func destroyField(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var tableID, databaseID, workspaceID int
+	var fieldName, tableName string
+	err := metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&fieldName, &tableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = metaDB.Exec("DELETE FROM fields WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Remove column from physical SQLite database
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// SQLite doesn't support dropping columns directly, so we need to recreate the table
+	_, err = db.Exec(fmt.Sprintf(`
+		CREATE TABLE %s_new AS SELECT * FROM %s;
+		DROP TABLE %s;
+		ALTER TABLE %s_new RENAME TO %s;
+	`, tableName, tableName, tableName, tableName, tableName))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+

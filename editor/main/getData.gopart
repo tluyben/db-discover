@@ -1,0 +1,69 @@
+func getData(w http.ResponseWriter, r *http.Request) {
+	databaseID := r.URL.Query().Get("database_id")
+	if databaseID == "" {
+		http.Error(w, "database_id is required", http.StatusBadRequest)
+		return
+	}
+
+	query := r.URL.Query().Get("query")
+	if query == "" {
+		http.Error(w, "query is required", http.StatusBadRequest)
+		return
+	}
+
+	if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "SELECT") {
+		http.Error(w, "Only SELECT queries are allowed", http.StatusBadRequest)
+		return
+	}
+
+	var workspaceID int
+	err := metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%s.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query(query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	columns, _ := rows.Columns()
+	var result []map[string]interface{}
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePointers := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePointers[i] = &values[i]
+		}
+
+		rows.Scan(valuePointers...)
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			b, ok := val.([]byte)
+			if ok {
+				row[col] = string(b)
+			} else {
+				row[col] = val
+			}
+		}
+
+		result = append(result, row)
+	}
+
+	json.NewEncoder(w).Encode(result)
+}
+

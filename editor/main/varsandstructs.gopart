@@ -1,0 +1,30 @@
+type Database struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	WorkspaceID int    `json:"workspace_id"`
+}
+
+
+type Table struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	DatabaseID int    `json:"database_id"`
+}
+
+
+type Field struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	TableID int    `json:"table_id"`
+}
+
+
+var metaDB *sql.DB
+
+
+var workspaceBasePath string
+
+var metaDBPath string
+

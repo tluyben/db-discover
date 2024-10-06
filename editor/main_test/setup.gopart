@@ -1,0 +1,21 @@
+func setupTestEnvironment() {
+	workspaceBasePath = "./test_workspaces"
+	metaDBPath = "./test_meta.db"
+
+	// Create test directories
+	os.MkdirAll(workspaceBasePath, os.ModePerm)
+
+	// Initialize test meta database
+	var err error
+	metaDB, err = sql.Open("sqlite3", metaDBPath)
+	if err != nil {
+		panic(err)
+	}
+	initMetaDB()
+}
+
+func cleanupTestEnvironment() {
+	metaDB.Close()
+	os.RemoveAll(workspaceBasePath)
+	os.Remove(metaDBPath)
+}

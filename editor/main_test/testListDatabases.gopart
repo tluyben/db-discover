@@ -1,0 +1,34 @@
+func TestListDatabases(t *testing.T) {
+	setupTestEnvironment()
+	defer cleanupTestEnvironment()
+
+	// Create a test database
+	_, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)",
+		"TestDB", "Test database", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := mux.NewRouter()
+	router.HandleFunc("/databases", listDatabases).Methods("GET")
+
+	req, _ := http.NewRequest("GET", "/databases?workspace_id=1", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response []Database
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	if len(response) != 1 {
+		t.Errorf("expected 1 database, got %d", len(response))
+	}
+
+	if response[0].Name != "TestDB" {
+		t.Errorf("expected database name TestDB, got %v", response[0].Name)
+	}
+}

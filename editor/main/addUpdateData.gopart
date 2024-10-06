@@ -1,0 +1,56 @@
+func addUpdateData(w http.ResponseWriter, r *http.Request) {
+	var data map[string]interface{}
+	json.NewDecoder(r.Body).Decode(&data)
+
+	databaseID, ok := data["database_id"].(float64)
+	if !ok {
+		http.Error(w, "database_id is required", http.StatusBadRequest)
+		return
+	}
+
+	tableName, ok := data["table_name"].(string)
+	if !ok {
+		http.Error(w, "table_name is required", http.StatusBadRequest)
+		return
+	}
+
+	delete(data, "database_id")
+	delete(data, "table_name")
+
+	var workspaceID int
+	err := metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", int(databaseID)).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", int(databaseID)))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	columns := make([]string, 0, len(data))
+	values := make([]interface{}, 0, len(data))
+	placeholders := make([]string, 0, len(data))
+
+	for k, v := range data {
+		columns = append(columns, k)
+		values = append(values, v)
+		placeholders = append(placeholders, "?")
+	}
+
+	query := fmt.Sprintf("INSERT OR REPLACE INTO %s (%s) VALUES (%s)",
+		tableName, strings.Join(columns, ", "), strings.Join(placeholders, ", "))
+
+	_, err = db.Exec(query, values...)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+

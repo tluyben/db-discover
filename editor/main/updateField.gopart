@@ -1,0 +1,64 @@
+func updateField(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var field Field
+	json.NewDecoder(r.Body).Decode(&field)
+
+	_, err := metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
+		field.Name, field.Type, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Update column in physical SQLite database
+	var tableID, databaseID, workspaceID int
+	var oldFieldName, tableName string
+	err = metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&oldFieldName, &tableID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// SQLite doesn't support changing column types directly, so we need to recreate the table
+	_, err = db.Exec(fmt.Sprintf(`
+		CREATE TABLE %s_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			%s %s,
+			%s
+		);
+		INSERT INTO %s_new SELECT * FROM %s;
+		DROP TABLE %s;
+		ALTER TABLE %s_new RENAME TO %s;
+	`, tableName, field.Name, field.Type,
+		getOtherColumnsSQL(tableID, id),
+		tableName, tableName, tableName, tableName, tableName))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(field)
+}
+

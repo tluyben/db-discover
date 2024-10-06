@@ -1,0 +1,30 @@
+func TestCreateDatabase(t *testing.T) {
+	setupTestEnvironment()
+	defer cleanupTestEnvironment()
+
+	router := mux.NewRouter()
+	router.HandleFunc("/databases", createDatabase).Methods("POST")
+
+	payload := []byte(`{"name":"TestDB","description":"Test database","workspace_id":1}`)
+	req, _ := http.NewRequest("POST", "/databases", bytes.NewBuffer(payload))
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var response Database
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	if response.Name != "TestDB" {
+		t.Errorf("expected database name TestDB, got %v", response.Name)
+	}
+
+	// Check if the database file was created
+	dbPath := filepath.Join(workspaceBasePath, "1", fmt.Sprintf("%d.sqlite", response.ID))
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Errorf("database file was not created at %s", dbPath)
+	}
+}

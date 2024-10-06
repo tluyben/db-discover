@@ -1,0 +1,25 @@
+func listDatabases(w http.ResponseWriter, r *http.Request) {
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID == "" {
+		http.Error(w, "workspace_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := metaDB.Query("SELECT id, name, description FROM databases WHERE workspace_id = ?", workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var databases []Database
+	for rows.Next() {
+		var db Database
+		rows.Scan(&db.ID, &db.Name, &db.Description)
+		db.WorkspaceID, _ = strconv.Atoi(workspaceID)
+		databases = append(databases, db)
+	}
+
+	json.NewEncoder(w).Encode(databases)
+}
+

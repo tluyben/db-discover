@@ -1,0 +1,39 @@
+func main() {
+	workspaceBasePath = os.Getenv("WORKSPACE_BASE_PATH")
+	if workspaceBasePath == "" {
+		workspaceBasePath = "/home/workspaces/{workspace_id}"
+	}
+
+	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+
+	var err error
+	metaDB, err = sql.Open("sqlite3", metaDBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer metaDB.Close()
+
+	initMetaDB()
+
+	// Define the port flag
+	port := flag.Int("port", 8080, "Port to run the server on")
+	flag.Parse()
+
+	r := mux.NewRouter()
+	r.HandleFunc("/databases", createDatabase).Methods("POST")
+	r.HandleFunc("/databases", listDatabases).Methods("GET")
+	r.HandleFunc("/databases/{id}", destroyDatabase).Methods("DELETE")
+	r.HandleFunc("/tables", createTable).Methods("POST")
+	r.HandleFunc("/tables", listTables).Methods("GET")
+	r.HandleFunc("/tables/{id}", destroyTable).Methods("DELETE")
+	r.HandleFunc("/fields", createField).Methods("POST")
+	r.HandleFunc("/fields", listFields).Methods("GET")
+	r.HandleFunc("/fields/{id}", destroyField).Methods("DELETE")
+	r.HandleFunc("/fields/{id}", updateField).Methods("PUT")
+	r.HandleFunc("/data", addUpdateData).Methods("POST")
+	r.HandleFunc("/data", getData).Methods("GET")
+
+	log.Printf("Server starting on :%d", *port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), r))
+}
+

@@ -1,0 +1,26 @@
+func createDatabase(w http.ResponseWriter, r *http.Request) {
+	var db Database
+	json.NewDecoder(r.Body).Decode(&db)
+
+	result, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)",
+		db.Name, db.Description, db.WorkspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	db.ID = int(id)
+
+	// Create physical SQLite database
+	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", db.WorkspaceID), fmt.Sprintf("%d.sqlite", db.ID))
+	os.MkdirAll(filepath.Dir(dbPath), os.ModePerm)
+	_, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(db)
+}
+
