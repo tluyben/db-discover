@@ -1,6 +1,10 @@
 func addUpdateData(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	databaseID, ok := data["database_id"].(float64)
 	if !ok {
@@ -18,7 +22,7 @@ func addUpdateData(w http.ResponseWriter, r *http.Request) {
 	delete(data, "table_name")
 
 	var workspaceID int
-	err := metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", int(databaseID)).Scan(&workspaceID)
+	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", int(databaseID)).Scan(&workspaceID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -53,4 +57,3 @@ func addUpdateData(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 }
-

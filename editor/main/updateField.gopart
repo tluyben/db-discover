@@ -3,9 +3,13 @@ func updateField(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	var field Field
-	json.NewDecoder(r.Body).Decode(&field)
+	err := json.NewDecoder(r.Body).Decode(&field)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	_, err := metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
+	_, err = metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
 		field.Name, field.Type, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -59,6 +63,7 @@ func updateField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	field.ID, _ = strconv.Atoi(id)
+	field.TableID = tableID
 	json.NewEncoder(w).Encode(field)
 }
-

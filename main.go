@@ -119,7 +119,7 @@ func initMetaDB(db string) {
 	metaDBPath = filepath.Join(workspaceBasePath, db)
 	metaDB, err = sql.Open("sqlite3", metaDBPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err, " in initMetaDB")
 	}
 
 	_, err = metaDB.Exec(`
@@ -296,7 +296,7 @@ func destroyDatabase(w http.ResponseWriter, r *http.Request) {
 func main() {
 	workspaceBasePath = os.Getenv("WORKSPACE_BASE_PATH")
 	if workspaceBasePath == "" {
-		workspaceBasePath = "/home/workspaces/{workspace_id}"
+		workspaceBasePath = "/home/workspaces"
 	}
 
 	initMetaDB("metadb.db")

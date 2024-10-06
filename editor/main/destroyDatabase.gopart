@@ -17,8 +17,11 @@ func destroyDatabase(w http.ResponseWriter, r *http.Request) {
 
 	// Remove physical SQLite database
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%s.sqlite", id))
-	os.Remove(dbPath)
+	err = os.Remove(dbPath)
+	if err != nil && !os.IsNotExist(err) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
-

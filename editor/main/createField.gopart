@@ -1,6 +1,10 @@
 func createField(w http.ResponseWriter, r *http.Request) {
 	var field Field
-	json.NewDecoder(r.Body).Decode(&field)
+	err := json.NewDecoder(r.Body).Decode(&field)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	result, err := metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)",
 		field.Name, field.Type, field.TableID)
@@ -43,4 +47,3 @@ func createField(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(field)
 }
-

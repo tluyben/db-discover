@@ -1,6 +1,10 @@
 func createTable(w http.ResponseWriter, r *http.Request) {
 	var table Table
-	json.NewDecoder(r.Body).Decode(&table)
+	err := json.NewDecoder(r.Body).Decode(&table)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	result, err := metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)",
 		table.Name, table.DatabaseID)
@@ -36,4 +40,3 @@ func createTable(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(table)
 }
-
