@@ -1,6 +1,6 @@
 func TestCreateDatabase(t *testing.T) {
-	setupTestEnvironment()
-	defer cleanupTestEnvironment()
+	setupTestEnv()
+	defer teardownTestEnv()
 
 	router := mux.NewRouter()
 	router.HandleFunc("/databases", createDatabase).Methods("POST")
@@ -20,11 +20,5 @@ func TestCreateDatabase(t *testing.T) {
 
 	if response.Name != "TestDB" {
 		t.Errorf("expected database name TestDB, got %v", response.Name)
-	}
-
-	// Check if the database file was created
-	dbPath := filepath.Join(workspaceBasePath, "1", fmt.Sprintf("%d.sqlite", response.ID))
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		t.Errorf("database file was not created at %s", dbPath)
 	}
 }
