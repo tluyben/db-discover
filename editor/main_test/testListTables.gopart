@@ -1,0 +1,18 @@
+func TestListTables(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/tables?database_id=1", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(listTables)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var tables []Table
+	json.Unmarshal(rr.Body.Bytes(), &tables)
+
+	if len(tables) == 0 {
+		t.Errorf("handler returned no tables")
+	}
+}

@@ -1,0 +1,18 @@
+func TestListDatabases(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/databases?workspace_id=1", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(listDatabases)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var databases []Database
+	json.Unmarshal(rr.Body.Bytes(), &databases)
+
+	if len(databases) == 0 {
+		t.Errorf("handler returned no databases")
+	}
+}

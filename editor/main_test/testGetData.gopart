@@ -1,0 +1,18 @@
+func TestGetData(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/data?database_id=1&query=SELECT * FROM TestTable", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(getData)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &result)
+
+	if len(result) == 0 {
+		t.Errorf("handler returned no data")
+	}
+}

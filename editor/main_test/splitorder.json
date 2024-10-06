@@ -1,1 +1,1 @@
-["imports.gopart"]
+["imports.gopart","varsandstructs.gopart","testListDatabases.gopart","testDestroyDatabase.gopart","testCreateTable.gopart","testListTables.gopart","testDestroyTable.gopart","testCreateField.gopart","testListFields.gopart","testDestroyField.gopart","testUpdateField.gopart","testAddUpdateData.gopart","testGetData.gopart"]

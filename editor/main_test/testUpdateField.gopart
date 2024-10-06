@@ -1,0 +1,24 @@
+func TestUpdateField(t *testing.T) {
+	field := Field{
+		Name: "UpdatedField",
+		Type: "INTEGER",
+	}
+
+	body, _ := json.Marshal(field)
+	req, _ := http.NewRequest("PUT", "/fields/1", bytes.NewBuffer(body))
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(updateField)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var updatedField Field
+	json.Unmarshal(rr.Body.Bytes(), &updatedField)
+
+	if updatedField.Name != field.Name || updatedField.Type != field.Type {
+		t.Errorf("handler returned unexpected body: got %v want %v", updatedField, field)
+	}
+}

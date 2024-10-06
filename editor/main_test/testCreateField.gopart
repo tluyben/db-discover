@@ -1,0 +1,25 @@
+func TestCreateField(t *testing.T) {
+	field := Field{
+		Name:    "TestField",
+		Type:    "TEXT",
+		TableID: 1,
+	}
+
+	body, _ := json.Marshal(field)
+	req, _ := http.NewRequest("POST", "/fields", bytes.NewBuffer(body))
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(createField)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var createdField Field
+	json.Unmarshal(rr.Body.Bytes(), &createdField)
+
+	if createdField.Name != field.Name {
+		t.Errorf("handler returned unexpected body: got %v want %v", createdField.Name, field.Name)
+	}
+}

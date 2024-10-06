@@ -1,0 +1,19 @@
+func TestAddUpdateData(t *testing.T) {
+	data := map[string]interface{}{
+		"database_id": 1,
+		"table_name":  "TestTable",
+		"column1":     "value1",
+		"column2":     42,
+	}
+
+	body, _ := json.Marshal(data)
+	req, _ := http.NewRequest("POST", "/data", bytes.NewBuffer(body))
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(addUpdateData)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusCreated {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
+	}
+}

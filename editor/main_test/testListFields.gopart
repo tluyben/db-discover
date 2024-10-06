@@ -1,0 +1,18 @@
+func TestListFields(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/fields?table_id=1", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(listFields)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var fields []Field
+	json.Unmarshal(rr.Body.Bytes(), &fields)
+
+	if len(fields) == 0 {
+		t.Errorf("handler returned no fields")
+	}
+}
