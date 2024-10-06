@@ -1,0 +1,27 @@
+func setupTestEnvironment() {
+	workspaceBasePath = os.TempDir()
+	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+
+	// Remove existing test database if it exists
+	os.Remove(metaDBPath)
+
+	initMetaDB()
+
+	// Create a test database
+	_, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test Database", 1)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a test table
+	_, err = metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable", 1)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a test field
+	_, err = metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)", "TestField", "TEXT", 1)
+	if err != nil {
+		panic(err)
+	}
+}

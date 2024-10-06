@@ -16,3 +16,4 @@ func TestListFields(t *testing.T) {
 		t.Errorf("handler returned no fields")
 	}
 }
+

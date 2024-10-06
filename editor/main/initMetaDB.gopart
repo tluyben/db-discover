@@ -1,5 +1,12 @@
 func initMetaDB() {
-	_, err := metaDB.Exec(`
+	var err error
+	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+	metaDB, err = sql.Open("sqlite3", metaDBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = metaDB.Exec(`
 		CREATE TABLE IF NOT EXISTS databases (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -24,4 +31,3 @@ func initMetaDB() {
 		log.Fatal(err)
 	}
 }
-

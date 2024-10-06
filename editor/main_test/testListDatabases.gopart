@@ -16,3 +16,4 @@ func TestListDatabases(t *testing.T) {
 		t.Errorf("handler returned no databases")
 	}
 }
+

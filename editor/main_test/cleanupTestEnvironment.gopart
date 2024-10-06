@@ -1,0 +1,4 @@
+func cleanupTestEnvironment() {
+	metaDB.Close()
+	os.Remove(metaDBPath)
+}

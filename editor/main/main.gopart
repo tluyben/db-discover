@@ -4,16 +4,8 @@ func main() {
 		workspaceBasePath = "/home/workspaces/{workspace_id}"
 	}
 
-	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
-
-	var err error
-	metaDB, err = sql.Open("sqlite3", metaDBPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer metaDB.Close()
-
 	initMetaDB()
+	defer metaDB.Close()
 
 	// Define the port flag
 	port := flag.Int("port", 8080, "Port to run the server on")
@@ -36,4 +28,3 @@ func main() {
 	log.Printf("Server starting on :%d", *port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), r))
 }
-

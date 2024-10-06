@@ -1,0 +1,7 @@
+func TestMain(m *testing.M) {
+	setupTestEnvironment()
+	code := m.Run()
+	cleanupTestEnvironment()
+	os.Exit(code)
+}
+

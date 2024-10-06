@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -36,6 +38,62 @@ func TestDestroyDatabase(t *testing.T) {
 
 	if status := rr.Code; status != http.StatusNoContent {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
+	}
+}
+
+func TestListFields(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/fields?table_id=1", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(listFields)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var fields []Field
+	json.Unmarshal(rr.Body.Bytes(), &fields)
+
+	if len(fields) == 0 {
+		t.Errorf("handler returned no fields")
+	}
+}
+
+func TestDestroyField(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/fields/1", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(destroyField)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusNoContent {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
+	}
+}
+
+func TestUpdateField(t *testing.T) {
+	field := Field{
+		Name: "UpdatedField",
+		Type: "INTEGER",
+	}
+
+	body, _ := json.Marshal(field)
+	req, _ := http.NewRequest("PUT", "/fields/1", bytes.NewBuffer(body))
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(updateField)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var updatedField Field
+	json.Unmarshal(rr.Body.Bytes(), &updatedField)
+
+	if updatedField.Name != field.Name || updatedField.Type != field.Type {
+		t.Errorf("handler returned unexpected body: got %v want %v", updatedField, field)
 	}
 }
 
@@ -121,62 +179,6 @@ func TestCreateField(t *testing.T) {
 	}
 }
 
-func TestListFields(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/fields?table_id=1", nil)
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(listFields)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-
-	var fields []Field
-	json.Unmarshal(rr.Body.Bytes(), &fields)
-
-	if len(fields) == 0 {
-		t.Errorf("handler returned no fields")
-	}
-}
-
-func TestDestroyField(t *testing.T) {
-	req, _ := http.NewRequest("DELETE", "/fields/1", nil)
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(destroyField)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusNoContent {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
-	}
-}
-
-func TestUpdateField(t *testing.T) {
-	field := Field{
-		Name: "UpdatedField",
-		Type: "INTEGER",
-	}
-
-	body, _ := json.Marshal(field)
-	req, _ := http.NewRequest("PUT", "/fields/1", bytes.NewBuffer(body))
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(updateField)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-
-	var updatedField Field
-	json.Unmarshal(rr.Body.Bytes(), &updatedField)
-
-	if updatedField.Name != field.Name || updatedField.Type != field.Type {
-		t.Errorf("handler returned unexpected body: got %v want %v", updatedField, field)
-	}
-}
-
 func TestAddUpdateData(t *testing.T) {
 	data := map[string]interface{}{
 		"database_id": 1,
@@ -214,4 +216,37 @@ func TestGetData(t *testing.T) {
 	if len(result) == 0 {
 		t.Errorf("handler returned no data")
 	}
+}
+
+func setupTestEnvironment() {
+	workspaceBasePath = os.TempDir()
+	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+
+	// Remove existing test database if it exists
+	os.Remove(metaDBPath)
+
+	initMetaDB()
+
+	// Create a test database
+	_, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test Database", 1)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a test table
+	_, err = metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable", 1)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a test field
+	_, err = metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)", "TestField", "TEXT", 1)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func cleanupTestEnvironment() {
+	metaDB.Close()
+	os.Remove(metaDBPath)
 }

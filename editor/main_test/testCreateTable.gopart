@@ -22,3 +22,4 @@ func TestCreateTable(t *testing.T) {
 		t.Errorf("handler returned unexpected body: got %v want %v", createdTable.Name, table.Name)
 	}
 }
+
