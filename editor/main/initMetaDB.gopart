@@ -31,3 +31,4 @@ func initMetaDB(db string) {
 		log.Fatalf("initMetaDB: Error creating tables: %v", err)
 	}
 }
+

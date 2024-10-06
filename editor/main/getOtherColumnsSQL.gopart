@@ -19,3 +19,4 @@ func getOtherColumnsSQL(tableID int, excludeFieldID string) string {
 
 	return strings.Join(columns, ", ")
 }
+

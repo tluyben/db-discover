@@ -4,6 +4,12 @@ func main() {
 		workspaceBasePath = "/home/workspaces"
 	}
 
+	// Create workspaceBasePath if it doesn't exist
+	err := os.MkdirAll(workspaceBasePath, os.ModePerm)
+	if err != nil {
+		log.Fatalf("Failed to create workspaceBasePath: %v", err)
+	}
+
 	initMetaDB("metadb.db")
 	defer metaDB.Close()
 
