@@ -1,24 +1,25 @@
 func TestCreateDatabase(t *testing.T) {
-	setupTestDB()
-	defer teardownTestDB()
+	db := Database{
+		Name:        "TestDB",
+		Description: "Test Database",
+		WorkspaceID: 1,
+	}
 
-	router := mux.NewRouter()
-	router.HandleFunc("/databases", createDatabase).Methods("POST")
-
-	payload := []byte(`{"name":"TestDB","description":"Test database","workspace_id":1}`)
-	req, _ := http.NewRequest("POST", "/databases", bytes.NewBuffer(payload))
+	body, _ := json.Marshal(db)
+	req, _ := http.NewRequest("POST", "/databases", bytes.NewBuffer(body))
 	rr := httptest.NewRecorder()
 
-	router.ServeHTTP(rr, req)
+	handler := http.HandlerFunc(createDatabase)
+	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	var response Database
-	json.Unmarshal(rr.Body.Bytes(), &response)
+	var createdDB Database
+	json.Unmarshal(rr.Body.Bytes(), &createdDB)
 
-	if response.Name != "TestDB" {
-		t.Errorf("handler returned unexpected body: got %v want %v", response.Name, "TestDB")
+	if createdDB.Name != db.Name {
+		t.Errorf("handler returned unexpected body: got %v want %v", createdDB.Name, db.Name)
 	}
 }
