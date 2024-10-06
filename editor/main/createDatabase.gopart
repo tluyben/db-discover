@@ -5,7 +5,7 @@ func createDatabase(w http.ResponseWriter, r *http.Request) {
 	result, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)",
 		db.Name, db.Description, db.WorkspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createDatabase: Error inserting into databases: %v", err)
 		return
 	}
 
@@ -17,10 +17,9 @@ func createDatabase(w http.ResponseWriter, r *http.Request) {
 	os.MkdirAll(filepath.Dir(dbPath), os.ModePerm)
 	_, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createDatabase: Error creating SQLite database: %v", err)
 		return
 	}
 
 	json.NewEncoder(w).Encode(db)
 }
-

@@ -1,7 +1,7 @@
 func getOtherColumnsSQL(tableID int, excludeFieldID string) string {
 	rows, err := metaDB.Query("SELECT name, type FROM fields WHERE table_id = ? AND id != ?", tableID, excludeFieldID)
 	if err != nil {
-		log.Printf("Error getting other columns: %v", err)
+		log.Fatalf("getOtherColumnsSQL: Error querying fields: %v", err)
 		return ""
 	}
 	defer rows.Close()
@@ -9,10 +9,13 @@ func getOtherColumnsSQL(tableID int, excludeFieldID string) string {
 	var columns []string
 	for rows.Next() {
 		var name, fieldType string
-		rows.Scan(&name, &fieldType)
+		err := rows.Scan(&name, &fieldType)
+		if err != nil {
+			log.Fatalf("getOtherColumnsSQL: Error scanning row: %v", err)
+			return ""
+		}
 		columns = append(columns, fmt.Sprintf("%s %s", name, fieldType))
 	}
 
 	return strings.Join(columns, ", ")
 }
-

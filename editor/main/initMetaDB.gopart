@@ -3,7 +3,7 @@ func initMetaDB(db string) {
 	metaDBPath = filepath.Join(workspaceBasePath, db)
 	metaDB, err = sql.Open("sqlite3", metaDBPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("initMetaDB: Error opening metaDB: %v", err)
 	}
 
 	_, err = metaDB.Exec(`
@@ -28,7 +28,6 @@ func initMetaDB(db string) {
 		);
 	`)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("initMetaDB: Error creating tables: %v", err)
 	}
 }
-

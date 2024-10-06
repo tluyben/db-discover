@@ -1,10 +1,6 @@
 func addUpdateData(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&data)
 
 	databaseID, ok := data["database_id"].(float64)
 	if !ok {
@@ -22,16 +18,16 @@ func addUpdateData(w http.ResponseWriter, r *http.Request) {
 	delete(data, "table_name")
 
 	var workspaceID int
-	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", int(databaseID)).Scan(&workspaceID)
+	err := metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", int(databaseID)).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("addUpdateData: Error querying workspace_id: %v", err)
 		return
 	}
 
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", int(databaseID)))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("addUpdateData: Error opening database: %v", err)
 		return
 	}
 	defer db.Close()
@@ -51,7 +47,7 @@ func addUpdateData(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Exec(query, values...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("addUpdateData: Error executing query: %v", err)
 		return
 	}
 

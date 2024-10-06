@@ -7,7 +7,7 @@ func listTables(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := metaDB.Query("SELECT id, name FROM tables WHERE database_id = ?", databaseID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("listTables: Error querying tables: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -15,11 +15,14 @@ func listTables(w http.ResponseWriter, r *http.Request) {
 	var tables []Table
 	for rows.Next() {
 		var table Table
-		rows.Scan(&table.ID, &table.Name)
+		err := rows.Scan(&table.ID, &table.Name)
+		if err != nil {
+			log.Fatalf("listTables: Error scanning row: %v", err)
+			return
+		}
 		table.DatabaseID, _ = strconv.Atoi(databaseID)
 		tables = append(tables, table)
 	}
 
 	json.NewEncoder(w).Encode(tables)
 }
-

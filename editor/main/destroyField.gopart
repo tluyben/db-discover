@@ -6,25 +6,25 @@ func destroyField(w http.ResponseWriter, r *http.Request) {
 	var fieldName, tableName string
 	err := metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&fieldName, &tableID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyField: Error querying field name and table_id: %v", err)
 		return
 	}
 
 	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyField: Error querying database_id and table name: %v", err)
 		return
 	}
 
 	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyField: Error querying workspace_id: %v", err)
 		return
 	}
 
 	_, err = metaDB.Exec("DELETE FROM fields WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyField: Error deleting from fields: %v", err)
 		return
 	}
 
@@ -32,7 +32,7 @@ func destroyField(w http.ResponseWriter, r *http.Request) {
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyField: Error opening SQLite database: %v", err)
 		return
 	}
 	defer db.Close()
@@ -44,7 +44,7 @@ func destroyField(w http.ResponseWriter, r *http.Request) {
 		ALTER TABLE %s_new RENAME TO %s;
 	`, tableName, tableName, tableName, tableName, tableName))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyField: Error recreating table: %v", err)
 		return
 	}
 

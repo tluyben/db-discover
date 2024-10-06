@@ -10,41 +10,46 @@ import (
 	"testing"
 )
 
-func cleanupTestEnvironment() {
-	metaDB.Close()
+func setupTestEnvironment() {
+	workspaceBasePath = os.TempDir()
+	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+
+	// Remove existing test database if it exists
 	os.Remove(metaDBPath)
-}
 
-func TestDestroyDatabase(t *testing.T) {
-	req, _ := http.NewRequest("DELETE", "/databases/1", nil)
-	rr := httptest.NewRecorder()
+	initMetaDB("test_metadb.db")
 
-	handler := http.HandlerFunc(destroyDatabase)
-	handler.ServeHTTP(rr, req)
+	// Create a test database
+	_, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test Database", 1)
+	if err != nil {
+		panic(err)
+	}
 
-	if status := rr.Code; status != http.StatusNoContent {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
+	// Create a test table
+	_, err = metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable", 1)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a test field
+	_, err = metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)", "TestField", "TEXT", 1)
+	if err != nil {
+		panic(err)
 	}
 }
 
-func TestAddUpdateData(t *testing.T) {
-	data := map[string]interface{}{
-		"database_id": 1,
-		"table_name":  "TestTable",
-		"column1":     "value1",
-		"column2":     42,
-	}
+func TestMain(m *testing.M) {
+	// Setup
+	setupTestEnvironment()
 
-	body, _ := json.Marshal(data)
-	req, _ := http.NewRequest("POST", "/data", bytes.NewBuffer(body))
-	rr := httptest.NewRecorder()
+	// Run tests
+	code := m.Run()
 
-	handler := http.HandlerFunc(addUpdateData)
-	handler.ServeHTTP(rr, req)
+	// Teardown
+	cleanupTestEnvironment()
 
-	if status := rr.Code; status != http.StatusCreated {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
-	}
+	// Exit with the test result code
+	os.Exit(code)
 }
 
 func TestGetData(t *testing.T) {
@@ -116,37 +121,6 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
-func TestListTables(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/tables?database_id=1", nil)
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(listTables)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-
-	var tables []Table
-	json.Unmarshal(rr.Body.Bytes(), &tables)
-
-	if len(tables) == 0 {
-		t.Errorf("handler returned no tables")
-	}
-}
-
-func TestDestroyTable(t *testing.T) {
-	req, _ := http.NewRequest("DELETE", "/tables/1", nil)
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(destroyTable)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusNoContent {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
-	}
-}
-
 func TestCreateField(t *testing.T) {
 	field := Field{
 		Name:    "TestField",
@@ -211,6 +185,31 @@ func TestListFields(t *testing.T) {
 	}
 }
 
+func cleanupTestEnvironment() {
+	metaDB.Close()
+	os.Remove(metaDBPath)
+}
+
+func TestAddUpdateData(t *testing.T) {
+	data := map[string]interface{}{
+		"database_id": 1,
+		"table_name":  "TestTable",
+		"column1":     "value1",
+		"column2":     42,
+	}
+
+	body, _ := json.Marshal(data)
+	req, _ := http.NewRequest("POST", "/data", bytes.NewBuffer(body))
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(addUpdateData)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusCreated {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
+	}
+}
+
 func TestDestroyField(t *testing.T) {
 	req, _ := http.NewRequest("DELETE", "/fields/1", nil)
 	rr := httptest.NewRecorder()
@@ -223,44 +222,45 @@ func TestDestroyField(t *testing.T) {
 	}
 }
 
-func setupTestEnvironment() {
-	workspaceBasePath = os.TempDir()
-	metaDBPath = filepath.Join(workspaceBasePath, "metadb.db")
+func TestDestroyTable(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/tables/1", nil)
+	rr := httptest.NewRecorder()
 
-	// Remove existing test database if it exists
-	os.Remove(metaDBPath)
+	handler := http.HandlerFunc(destroyTable)
+	handler.ServeHTTP(rr, req)
 
-	initMetaDB("test_metadb.db")
-
-	// Create a test database
-	_, err := metaDB.Exec("INSERT INTO databases (name, description, workspace_id) VALUES (?, ?, ?)", "TestDB", "Test Database", 1)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create a test table
-	_, err = metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)", "TestTable", 1)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create a test field
-	_, err = metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)", "TestField", "TEXT", 1)
-	if err != nil {
-		panic(err)
+	if status := rr.Code; status != http.StatusNoContent {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
 	}
 }
 
-func TestMain(m *testing.M) {
-	// Setup
-	setupTestEnvironment()
+func TestDestroyDatabase(t *testing.T) {
+	req, _ := http.NewRequest("DELETE", "/databases/1", nil)
+	rr := httptest.NewRecorder()
 
-	// Run tests
-	code := m.Run()
+	handler := http.HandlerFunc(destroyDatabase)
+	handler.ServeHTTP(rr, req)
 
-	// Teardown
-	cleanupTestEnvironment()
+	if status := rr.Code; status != http.StatusNoContent {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
+	}
+}
 
-	// Exit with the test result code
-	os.Exit(code)
+func TestListTables(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/tables?database_id=1", nil)
+	rr := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(listTables)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	var tables []Table
+	json.Unmarshal(rr.Body.Bytes(), &tables)
+
+	if len(tables) == 0 {
+		t.Errorf("handler returned no tables")
+	}
 }

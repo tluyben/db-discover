@@ -5,23 +5,19 @@ func destroyDatabase(w http.ResponseWriter, r *http.Request) {
 	var workspaceID int
 	err := metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", id).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyDatabase: Error querying workspace_id: %v", err)
 		return
 	}
 
 	_, err = metaDB.Exec("DELETE FROM databases WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyDatabase: Error deleting from databases: %v", err)
 		return
 	}
 
 	// Remove physical SQLite database
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%s.sqlite", id))
-	err = os.Remove(dbPath)
-	if err != nil && !os.IsNotExist(err) {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	os.Remove(dbPath)
 
 	w.WriteHeader(http.StatusNoContent)
 }

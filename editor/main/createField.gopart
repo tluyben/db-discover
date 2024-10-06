@@ -1,15 +1,11 @@
 func createField(w http.ResponseWriter, r *http.Request) {
 	var field Field
-	err := json.NewDecoder(r.Body).Decode(&field)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&field)
 
 	result, err := metaDB.Exec("INSERT INTO fields (name, type, table_id) VALUES (?, ?, ?)",
 		field.Name, field.Type, field.TableID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createField: Error inserting into fields: %v", err)
 		return
 	}
 
@@ -21,27 +17,27 @@ func createField(w http.ResponseWriter, r *http.Request) {
 	var tableName string
 	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", field.TableID).Scan(&databaseID, &tableName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createField: Error querying database_id and table name: %v", err)
 		return
 	}
 
 	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createField: Error querying workspace_id: %v", err)
 		return
 	}
 
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createField: Error opening SQLite database: %v", err)
 		return
 	}
 	defer db.Close()
 
 	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, field.Name, field.Type))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createField: Error altering table: %v", err)
 		return
 	}
 

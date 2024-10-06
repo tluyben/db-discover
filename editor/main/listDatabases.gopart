@@ -7,7 +7,7 @@ func listDatabases(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := metaDB.Query("SELECT id, name, description FROM databases WHERE workspace_id = ?", workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("listDatabases: Error querying databases: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -15,11 +15,14 @@ func listDatabases(w http.ResponseWriter, r *http.Request) {
 	var databases []Database
 	for rows.Next() {
 		var db Database
-		rows.Scan(&db.ID, &db.Name, &db.Description)
+		err := rows.Scan(&db.ID, &db.Name, &db.Description)
+		if err != nil {
+			log.Fatalf("listDatabases: Error scanning row: %v", err)
+			return
+		}
 		db.WorkspaceID, _ = strconv.Atoi(workspaceID)
 		databases = append(databases, db)
 	}
 
 	json.NewEncoder(w).Encode(databases)
 }
-

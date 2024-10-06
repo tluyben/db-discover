@@ -1,15 +1,11 @@
 func createTable(w http.ResponseWriter, r *http.Request) {
 	var table Table
-	err := json.NewDecoder(r.Body).Decode(&table)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&table)
 
 	result, err := metaDB.Exec("INSERT INTO tables (name, database_id) VALUES (?, ?)",
 		table.Name, table.DatabaseID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createTable: Error inserting into tables: %v", err)
 		return
 	}
 
@@ -20,21 +16,21 @@ func createTable(w http.ResponseWriter, r *http.Request) {
 	var workspaceID int
 	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", table.DatabaseID).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createTable: Error querying workspace_id: %v", err)
 		return
 	}
 
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", table.DatabaseID))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createTable: Error opening SQLite database: %v", err)
 		return
 	}
 	defer db.Close()
 
 	_, err = db.Exec(fmt.Sprintf("CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT)", table.Name))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("createTable: Error creating table: %v", err)
 		return
 	}
 

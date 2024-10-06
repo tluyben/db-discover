@@ -1,7 +1,7 @@
 func main() {
 	workspaceBasePath = os.Getenv("WORKSPACE_BASE_PATH")
 	if workspaceBasePath == "" {
-		workspaceBasePath = "/home/workspaces/{workspace_id}"
+		workspaceBasePath = "/home/workspaces"
 	}
 
 	initMetaDB("metadb.db")

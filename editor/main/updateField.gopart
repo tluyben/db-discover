@@ -3,16 +3,12 @@ func updateField(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	var field Field
-	err := json.NewDecoder(r.Body).Decode(&field)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&field)
 
-	_, err = metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
+	_, err := metaDB.Exec("UPDATE fields SET name = ?, type = ? WHERE id = ?",
 		field.Name, field.Type, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("updateField: Error updating field: %v", err)
 		return
 	}
 
@@ -21,26 +17,26 @@ func updateField(w http.ResponseWriter, r *http.Request) {
 	var oldFieldName, tableName string
 	err = metaDB.QueryRow("SELECT name, table_id FROM fields WHERE id = ?", id).Scan(&oldFieldName, &tableID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("updateField: Error querying old field name and table_id: %v", err)
 		return
 	}
 
 	err = metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", tableID).Scan(&databaseID, &tableName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("updateField: Error querying database_id and table name: %v", err)
 		return
 	}
 
 	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("updateField: Error querying workspace_id: %v", err)
 		return
 	}
 
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("updateField: Error opening SQLite database: %v", err)
 		return
 	}
 	defer db.Close()
@@ -59,11 +55,9 @@ func updateField(w http.ResponseWriter, r *http.Request) {
 		getOtherColumnsSQL(tableID, id),
 		tableName, tableName, tableName, tableName, tableName))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("updateField: Error recreating table: %v", err)
 		return
 	}
 
-	field.ID, _ = strconv.Atoi(id)
-	field.TableID = tableID
 	json.NewEncoder(w).Encode(field)
 }

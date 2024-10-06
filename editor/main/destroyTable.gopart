@@ -6,19 +6,19 @@ func destroyTable(w http.ResponseWriter, r *http.Request) {
 	var tableName string
 	err := metaDB.QueryRow("SELECT database_id, name FROM tables WHERE id = ?", id).Scan(&databaseID, &tableName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyTable: Error querying database_id and table name: %v", err)
 		return
 	}
 
 	err = metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyTable: Error querying workspace_id: %v", err)
 		return
 	}
 
 	_, err = metaDB.Exec("DELETE FROM tables WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyTable: Error deleting from tables: %v", err)
 		return
 	}
 
@@ -26,14 +26,14 @@ func destroyTable(w http.ResponseWriter, r *http.Request) {
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%d.sqlite", databaseID))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyTable: Error opening SQLite database: %v", err)
 		return
 	}
 	defer db.Close()
 
 	_, err = db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("destroyTable: Error dropping table: %v", err)
 		return
 	}
 

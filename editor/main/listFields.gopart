@@ -7,7 +7,7 @@ func listFields(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := metaDB.Query("SELECT id, name, type FROM fields WHERE table_id = ?", tableID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("listFields: Error querying fields: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -15,11 +15,14 @@ func listFields(w http.ResponseWriter, r *http.Request) {
 	var fields []Field
 	for rows.Next() {
 		var field Field
-		rows.Scan(&field.ID, &field.Name, &field.Type)
+		err := rows.Scan(&field.ID, &field.Name, &field.Type)
+		if err != nil {
+			log.Fatalf("listFields: Error scanning row: %v", err)
+			return
+		}
 		field.TableID, _ = strconv.Atoi(tableID)
 		fields = append(fields, field)
 	}
 
 	json.NewEncoder(w).Encode(fields)
 }
-

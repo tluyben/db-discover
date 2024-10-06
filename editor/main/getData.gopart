@@ -19,27 +19,27 @@ func getData(w http.ResponseWriter, r *http.Request) {
 	var workspaceID int
 	err := metaDB.QueryRow("SELECT workspace_id FROM databases WHERE id = ?", databaseID).Scan(&workspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("getData: Error querying workspace_id: %v", err)
 		return
 	}
 
 	dbPath := filepath.Join(workspaceBasePath, fmt.Sprintf("%d", workspaceID), fmt.Sprintf("%s.sqlite", databaseID))
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("getData: Error opening SQLite database: %v", err)
 		return
 	}
 	defer db.Close()
 
 	rows, err := db.Query(query)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Fatalf("getData: Error executing query: %v", err)
 		return
 	}
 	defer rows.Close()
 
 	columns, _ := rows.Columns()
-	result := make([]map[string]interface{}, 0)
+	var result []map[string]interface{}
 
 	for rows.Next() {
 		values := make([]interface{}, len(columns))
@@ -50,7 +50,7 @@ func getData(w http.ResponseWriter, r *http.Request) {
 
 		err := rows.Scan(valuePointers...)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Fatalf("getData: Error scanning row: %v", err)
 			return
 		}
 
