@@ -1,7 +1,13 @@
 func TestMain(m *testing.M) {
+	// Setup
 	setupTestEnvironment()
+
+	// Run tests
 	code := m.Run()
+
+	// Teardown
 	cleanupTestEnvironment()
+
+	// Exit with the test result code
 	os.Exit(code)
 }
-
